@@ -21,6 +21,27 @@ const TransactionGrid: React.FC<TransactionGridProps> = ({ onBack }) => {
     { headerName: "Status", field: "status", sortable: true, filter: true },
   ];
 
+  const mockTransactions = [
+    {
+      id: "1",
+      receiver: "John Doe",
+      accountNumber: "123456789",
+      ifscCode: "ABCD0123456",
+      amount: 1000,
+      type: "NEFT",
+      status: "Completed",
+    },
+    {
+      id: "2",
+      receiver: "Jane Smith",
+      accountNumber: "987654321",
+      ifscCode: "WXYZ0987654",
+      amount: 2000,
+      type: "RTGS",
+      status: "Pending",
+    },
+  ];
+
   useEffect(() => {
     const loadTransactions = async () => {
       const transactions = await mockApi.viewTransactions();
@@ -32,7 +53,7 @@ const TransactionGrid: React.FC<TransactionGridProps> = ({ onBack }) => {
 
   return (
     <div>
-      <button onClick={onBack} style={{ marginBottom: "10px" }}>
+      <button onClick={onBack} style={{ marginBottom: "10px", display: "none" }}>
         Back
       </button>
       <div className="ag-theme-alpine" style={{ height: 400, width: "100%" }}>
