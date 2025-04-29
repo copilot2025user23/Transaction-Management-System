@@ -1,41 +1,68 @@
 import React, { useState, useEffect } from "react";
-import { mockApi } from "../mock/api"; // Import mockApi for validations
+import TransactionService from "../Service/TransactionService";
+import { mockApi } from "../mock/api"; // Import mockApi for fetching receivers
 
-interface TransactionFormProps {
-  onViewTransactions: () => void; // Callback function passed from App.tsx
-}
-
-const TransactionForm: React.FC<TransactionFormProps> = ({ onViewTransactions }) => {
-  const [receivers, setReceivers] = useState<{ name: string; accountNumber: string; ifscCode: string }[]>([]);
-  const [receiverName, setReceiverName] = useState("");
-  const [accountNumber, setAccountNumber] = useState("");
+const TransactionForm: React.FC = () => {
+  const [receivers, setReceivers] = useState<{ senderAccount: string; name: string; receiverAccount: string; ifscCode: string }[]>([]);
+  const [receiver, setReceiver] = useState("");
+  const [receiverAccount, setReceiverAccount] = useState("");
   const [ifscCode, setIfscCode] = useState("");
   const [amount, setAmount] = useState<number | "">("");
-  const [transactionType, setTransactionType] = useState("UPI");
+  const [otp, setOtp] = useState("");
+  const [isOtpSent, setIsOtpSent] = useState(false);
+  const [type, setType] = useState("NEFT"); // Default transfer type
+  const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Fetch receivers list on component mount
+  // Fetch the list of receivers using mockApi
   useEffect(() => {
     const fetchReceivers = async () => {
-      const receiverList = await mockApi.getReceivers();
-      setReceivers(receiverList);
+      try {
+        const receiverList = await mockApi.getReceivers(); // Fetch receivers from mockApi
+        setReceivers(receiverList);
+      } catch (error) {
+        console.error("Error fetching receivers:", error);
+        setError("Failed to fetch receivers. Please try again later.");
+      }
     };
 
     fetchReceivers();
   }, []);
 
-  // Handle receiver selection
+  // Handle receiver selection and populate form fields
   const handleReceiverChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selectedReceiver = receivers.find((receiver) => receiver.name === e.target.value);
+    const selectedReceiver = receivers.find((r) => r.name === e.target.value);
     if (selectedReceiver) {
-      setReceiverName(selectedReceiver.name);
-      setAccountNumber(selectedReceiver.accountNumber);
+      setReceiver(selectedReceiver.name);
+      setReceiverAccount(selectedReceiver.receiverAccount);
       setIfscCode(selectedReceiver.ifscCode);
     } else {
-      setReceiverName("");
-      setAccountNumber("");
+      setReceiver("");
+      setReceiverAccount("");
       setIfscCode("");
+    }
+  };
+
+  const sendOtp = async () => {
+    const mobileNumber = sessionStorage.getItem("mobileNumber"); // Fetch logged-in user's mobile number
+    if (!mobileNumber) {
+      setError("Mobile number not found. Please log in again.");
+      return;
+    }
+
+    try {
+      // Mock OTP sending
+      const otpResponse = await mockApi.sendOtp(mobileNumber);
+      if (otpResponse.success) {
+        setIsOtpSent(true);
+        alert(`OTP sent to ${mobileNumber}`);
+      } else {
+        setError("Failed to send OTP. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error sending OTP:", error);
+      setError("Failed to send OTP. Please try again later.");
     }
   };
 
@@ -45,8 +72,8 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onViewTransactions })
     setSuccessMessage(null);
 
     // Validate fields
-    if (!receiverName || !accountNumber || !ifscCode || !amount) {
-      setError("All fields are required.");
+    if (!receiver || !receiverAccount || !amount || !otp) {
+      setError("All fields are required, including OTP.");
       return;
     }
 
@@ -55,61 +82,50 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onViewTransactions })
       return;
     }
 
-    // Validate Account Number
-    const accountNumberRegex = /^[0-9]{9,18}$/;
-    if (!accountNumberRegex.test(accountNumber)) {
-      setError("Account Number must be numeric and between 9 to 18 digits.");
-      return;
-    }
-
-    // Validate IFSC Code
-    const ifscCodeRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
-    if (!ifscCodeRegex.test(ifscCode)) {
-      setError("Invalid IFSC Code. It must follow the format: AAAA0BBBBBB.");
-      return;
-    }
-
-    // Check user limit
-    const userLimitResponse = await mockApi.checkUserLimit();
-    if (amount > userLimitResponse.limit) {
-      setError(`Amount exceeds the user limit of ${userLimitResponse.limit}.`);
-      return;
-    }
-
-    // Simulate initiating a transaction
-    const transactionResponse = await mockApi.initiateTransaction({
-      receiverName,
-      accountNumber,
-      ifscCode,
+    // Prepare payload
+    const payload = {
+      senderAccount: sessionStorage.getItem("accountId") || "UNKNOWN_ACCOUNT", // Fetch senderAccount from session storage
+      receiverAccount: receiverAccount,
       amount,
-      transactionType,
-    });
+      status: "PENDING", // Default status
+      currency: "INR", // Include transfer type in the payload
+    };
 
-    if (transactionResponse.success) {
-      setSuccessMessage(`Transaction initiated successfully! Transaction ID: ${transactionResponse.transactionId}`);
-      // Clear the form
-      setReceiverName("");
-      setAccountNumber("");
-      setIfscCode("");
-      setAmount("");
-      setTransactionType("UPI");
-    } else {
-      setError("Failed to initiate transaction. Please try again.");
+    try {
+      // Call the initiateTransaction API
+      const response = await TransactionService.initiateTransaction(payload);
+      if (response.status==='success') {
+        setSuccessMessage("Transaction initiated successfully!");
+        // Clear the form
+        setReceiver("");
+        setReceiverAccount("");
+        setIfscCode("");
+        setAmount("");
+        setType("NEFT"); // Reset transfer type to default
+        setDescription("");
+        setOtp("");
+        setIsOtpSent(false);
+      } else {
+        setError("Failed to initiate transaction. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error initiating transaction:", error);
+      setError("Failed to initiate transaction. Please try again later.");
     }
   };
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} className="transaction-form">
       <h2>Initiate Transaction</h2>
       {error && <p style={{ color: "red" }}>{error}</p>}
       {successMessage && <p style={{ color: "green" }}>{successMessage}</p>}
       <div>
         <label>Receiver Name:</label>
-        <select value={receiverName} onChange={handleReceiverChange}>
+        <select value={receiver} onChange={handleReceiverChange}>
           <option value="">Select Receiver</option>
-          {receivers.map((receiver) => (
-            <option key={receiver.name} value={receiver.name}>
-              {receiver.name}
+          {receivers.map((r) => (
+            <option key={r.name} value={r.name}>
+              {r.name}
             </option>
           ))}
         </select>
@@ -118,7 +134,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onViewTransactions })
         <label>Account Number:</label>
         <input
           type="text"
-          value={accountNumber}
+          value={receiverAccount}
           placeholder="Enter account number"
           required
           readOnly // Make it read-only since it's auto-filled
@@ -145,21 +161,33 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onViewTransactions })
         />
       </div>
       <div>
-        <label>Transaction Type:</label>
-        <select
-          value={transactionType}
-          onChange={(e) => setTransactionType(e.target.value)}
-        >
-          <option value="UPI">UPI</option>
+        <label>Transfer Type:</label>
+        <select value={type} onChange={(e) => setType(e.target.value)}>
           <option value="NEFT">NEFT</option>
-          <option value="RTGS">RTGS</option>
           <option value="IMPS">IMPS</option>
+          <option value="UPI">UPI</option>
         </select>
       </div>
-      <button type="submit">Initiate Transaction</button>
-      <button type="button" onClick={onViewTransactions} style={{ marginLeft: "10px" }}>
-        View Transactions
-      </button>
+      {isOtpSent && ( // Conditionally render the OTP input field
+        <div>
+          <label>Enter OTP:</label>
+          <input
+            type="text"
+            value={otp}
+            onChange={(e) => setOtp(e.target.value)}
+            placeholder="Enter OTP"
+            required
+          />
+        </div>
+      )}
+      <div className="button-container">
+        <button type="button" onClick={sendOtp} disabled={isOtpSent} style={{ marginRight: "10px" }}>
+          {isOtpSent ? "OTP Sent" : "Send OTP"}
+        </button>
+        <button type="submit" disabled={!otp || !isOtpSent}>
+          Initiate Transaction
+        </button>
+      </div>
     </form>
   );
 };

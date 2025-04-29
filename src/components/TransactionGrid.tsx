@@ -1,69 +1,62 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
-import { mockApi } from "../mock/api"; // Import the mockApi object
+import { ColDef } from "ag-grid-community"; // Import ColDef type
+import TransactionService, { Transaction } from "../Service/TransactionService";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-alpine.css";
 
 interface TransactionGridProps {
-  onBack: () => void; // Callback function passed from App.tsx
+  onBack: () => void;
 }
 
 const TransactionGrid: React.FC<TransactionGridProps> = ({ onBack }) => {
-  const [rowData, setRowData] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-  const columnDefs = [
-    { headerName: "Transaction ID", field: "id", sortable: true, filter: true },
-    { headerName: "Receiver", field: "receiver", sortable: true, filter: true },
-    { headerName: "Account Number", field: "accountNumber", sortable: true, filter: true },
-    { headerName: "IFSC Code", field: "ifscCode", sortable: true, filter: true },
-    { headerName: "Amount", field: "amount", sortable: true, filter: true },
-    { headerName: "Type", field: "type", sortable: true, filter: true },
+  // Define column definitions for AG Grid with proper typing
+  const defaultcolumnDefs: ColDef<Transaction>[] = [
+    { headerName: "Transaction ID", field: "transactionId", sortable: true, filter: true },
+    { headerName: "Sender Account", field: "senderAccount", sortable: true, filter: true },
+    { headerName: "Receiver Account", field: "receiverAccount", sortable: true, filter: true },
+    { headerName: "Amount", field: "amount", sortable: true, filter: true, valueFormatter: (params) => `₹${params.value.toFixed(2)}` },
     { headerName: "Status", field: "status", sortable: true, filter: true },
-  ];
-
-  const mockTransactions = [
     {
-      id: "1",
-      receiver: "John Doe",
-      accountNumber: "123456789",
-      ifscCode: "ABCD0123456",
-      amount: 1000,
-      type: "NEFT",
-      status: "Completed",
-    },
-    {
-      id: "2",
-      receiver: "Jane Smith",
-      accountNumber: "987654321",
-      ifscCode: "WXYZ0987654",
-      amount: 2000,
-      type: "RTGS",
-      status: "Pending",
+      headerName: "Category",
+      field: "transactionCategory",
+      sortable: true,
+      filter: true,
+      valueGetter: (params) => (params.data ? params.data.transactionCategory || "N/A" : "N/A"), // Null check for params.data
     },
   ];
 
   useEffect(() => {
-    const loadTransactions = async () => {
-      const transactions = await mockApi.viewTransactions();
-      setRowData(transactions);
+    const fetchTransactions = async () => {
+      try {
+        const transactions = await TransactionService.getAllTransactions();
+        setTransactions(transactions);
+      } catch (error) {
+        console.error("Error fetching transactions:", error);
+        setError("Failed to fetch transactions. Please try again later.");
+      }
     };
 
-    loadTransactions();
+    fetchTransactions();
   }, []);
 
   return (
-    <div>
-      <button onClick={onBack} style={{ marginBottom: "10px", display: "none" }}>
-        Back
-      </button>
+    <div className="transaction-grid">
+      <h2 className="transaction-heading">Transaction History</h2>
+      {error && <p className="error-message">{error}</p>}
+      {!error && transactions.length === 0 && <p className="no-transactions">No transactions found.</p>}
       <div className="ag-theme-alpine" style={{ height: 400, width: "100%" }}>
         <AgGridReact
-          rowData={rowData}
-          columnDefs={columnDefs}
-          pagination={true}
-          paginationPageSize={5}
+          rowData={transactions} // Set row data
+          columnDefs={defaultcolumnDefs} // Set column definitions
+          pagination={true} // Enable pagination
+          paginationPageSize={10} // Set page size
         />
       </div>
+      <button className="back-button" onClick={onBack}>Back</button>
     </div>
   );
 };

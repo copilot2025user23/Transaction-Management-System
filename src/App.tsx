@@ -83,19 +83,12 @@ import { BrowserRouter as Router, Route, Routes, Navigate, Link } from "react-ro
 import TransactionForm from "./components/TransactionForm";
 import TransactionGrid from "./components/TransactionGrid";
 import AuthComponent from "./components/AuthComponent";
-import AuthService from "./Service/AuthService";
 import "./App.css";
 
 const App: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-  // Check if the user is already logged in
-  useEffect(() => {
-    const currentUser = AuthService.getCurrentUser();
-    if (currentUser) {
-      setIsAuthenticated(true);
-    }
-  }, []);
+  const [isAuthenticated, setIsAuthenticated] = useState(
+    localStorage.getItem("isAuthenticated") === "true"
+  );
 
   // Method to handle login success
   const handleLoginSuccess = () => {
@@ -104,7 +97,7 @@ const App: React.FC = () => {
 
   // Method to handle logout
   const handleLogout = () => {
-    AuthService.logout();
+    localStorage.removeItem("isAuthenticated"); // Clear login state
     setIsAuthenticated(false);
   };
 
@@ -162,13 +155,13 @@ const App: React.FC = () => {
             element={<AuthComponent onLoginSuccess={handleLoginSuccess} />}
           />
           <Route
-            path="/begin-transaction"
-            element={isAuthenticated ? <TransactionForm onViewTransactions={() => {}} /> : <Navigate to="/login" />}
-          />
-          <Route
-            path="/view-transactions"
-            element={isAuthenticated ? <TransactionGrid onBack={() => {}} /> : <Navigate to="/login" />}
-          />
+  path="/begin-transaction"
+  element={isAuthenticated ? <TransactionForm /> : <Navigate to="/login" />}
+/>
+<Route
+  path="/view-transactions"
+  element={isAuthenticated ? <TransactionGrid onBack={() => window.history.back()} /> : <Navigate to="/login" />}
+/>
         </Routes>
       </div>
     </Router>
